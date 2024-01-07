@@ -1,9 +1,12 @@
 import prisma from '../startup/db';
+import  cloudinary from '../utils/cloudinary';
 
 
 // admin get all listing --
 export const getAllListings = async (req, res) => {
-    const listing = await prisma.agentListing.findMany({})
+    const listing = await prisma.agentListing.findMany({
+        include: { imgSrc: true, propertyLocation: true}
+    })
 
     res.json({data: listing})
 }
@@ -14,8 +17,9 @@ export const getAllApprovedListings = async (req, res) => {
         where: {
             listingStatus: {
                 desc: 'APPROVED'
-            }
-        }
+            },
+        },
+        include: { imgSrc: true, propertyLocation: true}
     })
 
     res.json({data: listing})
@@ -29,7 +33,7 @@ export const getListingById = async (req, res) => {
     const listing = await prisma.agentListing.findFirst({
         where: {
             id,
-        }
+        }, include: { imgSrc: true}
     })
 
     res.json({data: listing})
@@ -50,61 +54,15 @@ export const getAllListingsByAgent = async (req, res) => {
     const listings = await prisma.agentListing.findMany({
         where: {
             assignedToUserId: req.user.id
-        }
+        }, include: { imgSrc: true, propertyLocation: true}
     })
 
     res.json({ data: listings})
 }
 
 // post listing --
-export const postListing = async (req , res) => {
-
-    try {
-        const newListingStatus = await prisma.agentListingStatus.create({
-            data: {
-                desc: req.body.listingStatus
-            }
-          })
+export const postListing = async (req, res,) => {
     
-          const newListing = await prisma.agentListing.create({
-       
-            data: {
-              price: req.body.price,
-              bed: req.body.bed,
-              bath: req.body.bath,
-              propertySize: req.body.propertySize,
-              //assignedToUserId: req.user.id,
-              assignedToUser: {
-                connect: {
-                    id: req.body.assignedToUserId
-                  }
-              },
-              assignedToUserEmail: req.body.assignedToUserEmail,
-              assignedToUserPhone: req.body.assignedToUserPhone,
-              assignedToUserName: req.body.assignedToUserName,
-              propertyLocation: {
-                connect: {
-                  id: req.body.propertyLocationId 
-                }
-              },
-              listedBy: req.body.listedBy,
-              listingStatus: {
-                connect: {
-                    id: newListingStatus.id
-                }
-              },
-              description: req.body.description,
-              
-            //   imgSrc: {
-            //     create: req.body.imgSrc.map((src: string) => ({ src })),
-            //   },
-            },
-          });
-    
-          res.json({data: newListing})
-    } catch (error) {
-        res.status(500).json({error: 'Internal server error'})
-    }
 }
 
 export const updateListing = async (req, res) => {
@@ -112,7 +70,7 @@ export const updateListing = async (req, res) => {
     const updated = await prisma.agentListing.update({
         where: {
             id: parseInt(req.params.id),
-            //assignedToUserId: req.user.id
+            assignedToUserId: req.user.id
         },
 
         data: {
@@ -132,12 +90,28 @@ export const updateListing = async (req, res) => {
 
 export const deleteListing = async (req, res) => {
 
-    const deleted = await prisma.agentListing.delete({
-        where: {
-            id: parseInt(req.params.id),
-            //assignedToUserId: req.user.id
-        }
+    const listing = await prisma.agentListing.findUnique({
+        where: { id: parseInt(req.params.id) },
+        include: { imgSrc: true}
     })
 
-    res.json({data: deleted})
+    if(!listing) return res.status(404).send('Listing not found!');
+
+    if(listing.imgSrc) 
+        listing.imgSrc.map((image) => cloudinary.del(image.src))
+    
+    await prisma.agentListing.delete({
+            where: {
+                id: parseInt(req.params.id),
+                //assignedToUserId: req.user.id
+            }
+    })
+
+    await Promise.all(
+        listing.imgSrc.map((image) =>
+          prisma.image.delete({ where: { id: image.id } })
+        )
+      );
+
+    res.json({data: listing})
 }
