@@ -60,10 +60,6 @@ export const getAllListingsByAgent = async (req, res) => {
     res.json({ data: listings})
 }
 
-// post listing --
-export const postListing = async (req, res,) => {
-    
-}
 
 export const updateListing = async (req, res) => {
 
